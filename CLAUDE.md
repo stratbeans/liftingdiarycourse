@@ -8,6 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Before writing any code**, always check the `/docs` directory for a relevant guide. If a matching doc exists, read it first and follow its conventions. Do not rely on training data assumptions when a local doc is available.
 
+- docs/ui.md : For UI guidelines
+- docs/data-fetching.md  : For Data fetching guideline
+
 ## Commands
 
 ```bash
