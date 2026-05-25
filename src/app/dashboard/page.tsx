@@ -1,59 +1,44 @@
-"use client";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import { getWorkoutsForDate } from "@/db/queries/workouts";
+import { DatePicker } from "./_components/date-picker";
 
-import { useState } from "react";
-import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { buttonVariants } from "@/components/ui/button";
+type ExerciseSummary = {
+  workoutExerciseId: string;
+  exerciseName: string;
+  setCount: number;
+};
 
-function formatDate(date: Date): string {
-  const day = parseInt(format(date, "d"));
-  const suffix =
-    day % 100 >= 11 && day % 100 <= 13
-      ? "th"
-      : day % 10 === 1
-      ? "st"
-      : day % 10 === 2
-      ? "nd"
-      : day % 10 === 3
-      ? "rd"
-      : "th";
-  return `${day}${suffix} ${format(date, "MMM yyyy")}`;
+function groupByExercise(
+  rows: Awaited<ReturnType<typeof getWorkoutsForDate>>
+): ExerciseSummary[] {
+  const map = new Map<string, ExerciseSummary>();
+  for (const row of rows) {
+    if (!map.has(row.workoutExerciseId)) {
+      map.set(row.workoutExerciseId, {
+        workoutExerciseId: row.workoutExerciseId,
+        exerciseName: row.exerciseName,
+        setCount: 0,
+      });
+    }
+    map.get(row.workoutExerciseId)!.setCount += 1;
+  }
+  return Array.from(map.values());
 }
 
-// Placeholder workout data — replace with real data fetching later
-const MOCK_WORKOUTS = [
-  {
-    id: 1,
-    name: "Bench Press",
-    sets: 4,
-    reps: 8,
-    weight: "80kg",
-  },
-  {
-    id: 2,
-    name: "Squat",
-    sets: 5,
-    reps: 5,
-    weight: "120kg",
-  },
-  {
-    id: 3,
-    name: "Deadlift",
-    sets: 3,
-    reps: 5,
-    weight: "140kg",
-  },
-];
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
+  const { userId } = await auth();
+  if (!userId) redirect("/login");
 
-export default function DashboardPage() {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [open, setOpen] = useState(false);
+  const { date: dateParam } = await searchParams;
+  const selectedDate = dateParam ? new Date(dateParam) : new Date();
+
+  const rows = await getWorkoutsForDate(userId, selectedDate);
+  const exercises = groupByExercise(rows);
 
   return (
     <div className="container mx-auto max-w-2xl px-4 py-10">
@@ -61,45 +46,24 @@ export default function DashboardPage() {
 
       <div className="flex items-center gap-3 mb-8">
         <span className="text-sm text-muted-foreground">Showing workouts for</span>
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger className={buttonVariants({ variant: "outline" })}>
-            <CalendarIcon className="h-4 w-4" />
-            {formatDate(selectedDate)}
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={(date) => {
-                if (date) {
-                  setSelectedDate(date);
-                  setOpen(false);
-                }
-              }}
-
-            />
-          </PopoverContent>
-        </Popover>
+        <DatePicker selected={selectedDate} />
       </div>
 
       <div className="space-y-3">
-        {MOCK_WORKOUTS.length === 0 ? (
+        {exercises.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No workouts logged for this date.
           </p>
         ) : (
-          MOCK_WORKOUTS.map((workout) => (
+          exercises.map((exercise) => (
             <div
-              key={workout.id}
+              key={exercise.workoutExerciseId}
               className="flex items-center justify-between rounded-lg border px-4 py-3"
             >
-              <div>
-                <p className="font-medium">{workout.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {workout.sets} sets × {workout.reps} reps
-                </p>
-              </div>
-              <span className="text-sm font-medium">{workout.weight}</span>
+              <p className="font-medium">{exercise.exerciseName}</p>
+              <span className="text-sm text-muted-foreground">
+                {exercise.setCount} {exercise.setCount === 1 ? "set" : "sets"}
+              </span>
             </div>
           ))
         )}
